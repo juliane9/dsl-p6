@@ -2,18 +2,28 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
+import re
 
 
 # -----------------------
 # Settings
 # -----------------------
-MASKS_DIR = Path("images_and_masks/maize_2/frame_0001_masks")
-OUTPUT_REPORT = Path("mask_quality_report.txt")
+MAIZE_DIR = Path("images_and_masks/maize_2")
 
 # Suffix patterns for different mask types
 GROUND_TRUTH_SUFFIX = "_mask_ground_truth.png"
 GROUNDED_SAM_SUFFIX = "_mask_grounded_sam_vit_b.png"
+GROUNDED_SAM_LARGE_SUFFIX = "_mask_grounded_sam_vit_l.png"
+GROUNDED_SAM_HUGE_SUFFIX = "_mask_grounded_sam_vit_h.png"
 BASIC_SUFFIX = "_mask_colors.png"
+
+# Define all available methods
+METHODS_CONFIG = {
+    'Basic Color': BASIC_SUFFIX,
+    'GroundedSAM vit_b': GROUNDED_SAM_SUFFIX,
+    'GroundedSAM vit_l': GROUNDED_SAM_LARGE_SUFFIX,
+    'GroundedSAM vit_h': GROUNDED_SAM_HUGE_SUFFIX,
+}
 
 
 def load_mask(mask_path):
@@ -58,11 +68,12 @@ def calculate_metrics(ground_truth, prediction):
     fp = np.sum((prediction == 1) & (ground_truth == 0))
     fn = np.sum((prediction == 0) & (ground_truth == 1))
     
-    # Precision, Recall, F1
+    # Precision, Recall, F1, Balanced Accuracy
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    accuracy = (tp + tn) / (tp + tn + fp + fn)
+    tnr = tn / (tn + fp) if (tn + fp) > 0 else 0
+    balanced_accuracy = (recall + tnr) / 2
     
     metrics = {
         'IoU': calculate_iou(ground_truth, prediction),
@@ -70,137 +81,171 @@ def calculate_metrics(ground_truth, prediction):
         'Precision': precision,
         'Recall': recall,
         'F1_Score': f1_score,
-        'Accuracy': accuracy,
+        'Balanced_Accuracy': balanced_accuracy,
     }
     
     return metrics
 
 
-def get_image_id(filepath):
-    """Extract base image ID from filename."""
-    return filepath.stem.replace(GROUND_TRUTH_SUFFIX[:-4], "").replace(GROUNDED_SAM_SUFFIX[:-4], "").replace(BASIC_SUFFIX[:-4], "")
+def get_frame_id(frame_dir):
+    """Extract frame ID from directory name (e.g., 'frame_0001' -> '0001')."""
+    match = re.search(r'frame_(\d+)', frame_dir.name)
+    return match.group(1) if match else frame_dir.name
 
 
-def main():
-    """Main analysis function."""
+def find_frame_directories():
+    """Find all frame mask directories."""
+    if not MAIZE_DIR.exists():
+        print(f"❌ Maize directory not found: {MAIZE_DIR}")
+        return []
     
-    if not MASKS_DIR.exists():
-        print(f"❌ Masks directory not found: {MASKS_DIR}")
-        return
+    frame_dirs = sorted([d for d in MAIZE_DIR.iterdir() if d.is_dir() and '_masks' in d.name])
+    return frame_dirs
+
+
+def detect_available_methods(masks_dir):
+    """Detect which mask methods are available in this frame directory."""
+    available_methods = {}
+    
+    # Check for ground truth first
+    gt_masks = list(masks_dir.glob(f"*{GROUND_TRUTH_SUFFIX}"))
+    if not gt_masks:
+        return None
+    
+    # Check which prediction methods exist
+    for method_name, suffix in METHODS_CONFIG.items():
+        method_masks = list(masks_dir.glob(f"*{suffix}"))
+        if method_masks:
+            available_methods[method_name] = suffix
+    
+    return available_methods if available_methods else None
+
+
+def analyze_frame(masks_dir, frame_id):
+    """Analyze a single frame and return results."""
+    
+    if not masks_dir.exists():
+        print(f"❌ Frame directory not found: {masks_dir}")
+        return None
     
     # Find all ground truth masks
-    ground_truth_masks = sorted(MASKS_DIR.glob(f"*{GROUND_TRUTH_SUFFIX}"))
+    ground_truth_masks = sorted(masks_dir.glob(f"*{GROUND_TRUTH_SUFFIX}"))
     
     if not ground_truth_masks:
-        print(f"❌ No ground truth masks found in: {MASKS_DIR}")
-        return
+        print(f"❌ No ground truth masks found in: {masks_dir}")
+        return None
     
-    print(f"Found {len(ground_truth_masks)} images to analyze\n")
+    # Detect available methods
+    available_methods = detect_available_methods(masks_dir)
+    if not available_methods:
+        print(f"❌ No prediction masks found in: {masks_dir}")
+        return None
+    
+    print(f"\n📁 Frame {frame_id}: Found {len(ground_truth_masks)} images")
+    print(f"   Available methods: {', '.join(available_methods.keys())}")
     
     # Storage for results
     results = []
     
     # Process each ground truth mask
     for gt_path in ground_truth_masks:
-        image_id = get_image_id(gt_path)
-        
-        # Construct paths for other masks
-        grounded_sam_path = MASKS_DIR / f"{image_id}{GROUNDED_SAM_SUFFIX}"
-        basic_path = MASKS_DIR / f"{image_id}{BASIC_SUFFIX}"
+        image_id = gt_path.stem.replace(GROUND_TRUTH_SUFFIX[:-4], "")
         
         # Load ground truth
         gt_mask = load_mask(gt_path)
         if gt_mask is None:
-            print(f"⚠️  Skipped: Could not load ground truth {gt_path.name}")
+            print(f"   ⚠️  Skipped: Could not load ground truth {gt_path.name}")
             continue
         
-        # Load GroundedSAM mask
-        sam_mask = load_mask(grounded_sam_path)
-        if sam_mask is None:
-            print(f"⚠️  Skipped: Could not load GroundedSAM {grounded_sam_path.name}")
-            continue
+        # Load prediction masks for available methods
+        row = {'Image': image_id}
+        skip_image = False
         
-        # Load basic color mask
-        basic_mask = load_mask(basic_path)
-        if basic_mask is None:
-            print(f"⚠️  Skipped: Could not load basic color {basic_path.name}")
-            continue
+        for method_name, suffix in available_methods.items():
+            pred_path = masks_dir / f"{image_id}{suffix}"
+            pred_mask = load_mask(pred_path)
+            
+            if pred_mask is None:
+                print(f"   ⚠️  Skipped: Could not load {method_name} {pred_path.name}")
+                skip_image = True
+                break
+            
+            # Calculate metrics
+            metrics = calculate_metrics(gt_mask, pred_mask)
+            
+            # Store metrics with method prefix
+            method_prefix = method_name.replace(' ', '_').replace('.', '_').replace('_vit', '_vit')
+            method_prefix = method_prefix.replace('GroundedSAM_vit_b', 'SAM').replace('GroundedSAM_vit_l', 'SAM_L').replace('GroundedSAM_vit_h', 'SAM_H').replace('Basic_Color', 'Basic')
+            
+            row[f'{method_prefix}_IoU'] = metrics['IoU']
+            row[f'{method_prefix}_Dice'] = metrics['Dice']
+            row[f'{method_prefix}_Precision'] = metrics['Precision']
+            row[f'{method_prefix}_Recall'] = metrics['Recall']
+            row[f'{method_prefix}_F1'] = metrics['F1_Score']
+            row[f'{method_prefix}_Balanced_Accuracy'] = metrics['Balanced_Accuracy']
         
-        # Calculate metrics for both techniques
-        sam_metrics = calculate_metrics(gt_mask, sam_mask)
-        basic_metrics = calculate_metrics(gt_mask, basic_mask)
-        
-        results.append({
-            'Image': image_id,
-            'SAM_IoU': sam_metrics['IoU'],
-            'SAM_Dice': sam_metrics['Dice'],
-            'SAM_Precision': sam_metrics['Precision'],
-            'SAM_Recall': sam_metrics['Recall'],
-            'SAM_F1': sam_metrics['F1_Score'],
-            'SAM_Accuracy': sam_metrics['Accuracy'],
-            'Basic_IoU': basic_metrics['IoU'],
-            'Basic_Dice': basic_metrics['Dice'],
-            'Basic_Precision': basic_metrics['Precision'],
-            'Basic_Recall': basic_metrics['Recall'],
-            'Basic_F1': basic_metrics['F1_Score'],
-            'Basic_Accuracy': basic_metrics['Accuracy'],
-        })
-        
-        print(f"✓ Processed: {image_id}")
+        if not skip_image:
+            results.append(row)
+            print(f"   ✓ Processed: {image_id}")
     
     if not results:
-        print("❌ No valid masks to analyze")
-        return
+        print(f"❌ No valid masks to analyze in frame {frame_id}")
+        return None
+    
+    return {
+        'frame_id': frame_id,
+        'masks_dir': masks_dir,
+        'available_methods': available_methods,
+        'results': results,
+    }
+
+
+def generate_report(analysis_data):
+    """Generate report for a single frame."""
+    
+    frame_id = analysis_data['frame_id']
+    available_methods = analysis_data['available_methods']
+    results = analysis_data['results']
     
     # Create DataFrame
     df = pd.DataFrame(results)
     
+    # Build method prefixes for column names
+    method_prefixes = {}
+    for method_name in available_methods.keys():
+        prefix = method_name.replace(' ', '_').replace('.', '_').replace('_vit', '_vit')
+        prefix = prefix.replace('GroundedSAM_vit_b', 'SAM').replace('GroundedSAM_vit_l', 'SAM_L').replace('GroundedSAM_vit_h', 'SAM_H').replace('Basic_Color', 'Basic')
+        method_prefixes[method_name] = prefix
+    
     # Calculate mean metrics
-    mean_metrics = {
-        'Image': 'MEAN',
-        'SAM_IoU': df['SAM_IoU'].mean(),
-        'SAM_Dice': df['SAM_Dice'].mean(),
-        'SAM_Precision': df['SAM_Precision'].mean(),
-        'SAM_Recall': df['SAM_Recall'].mean(),
-        'SAM_F1': df['SAM_F1'].mean(),
-        'SAM_Accuracy': df['SAM_Accuracy'].mean(),
-        'Basic_IoU': df['Basic_IoU'].mean(),
-        'Basic_Dice': df['Basic_Dice'].mean(),
-        'Basic_Precision': df['Basic_Precision'].mean(),
-        'Basic_Recall': df['Basic_Recall'].mean(),
-        'Basic_F1': df['Basic_F1'].mean(),
-        'Basic_Accuracy': df['Basic_Accuracy'].mean(),
-    }
+    mean_metrics = {'Image': 'MEAN'}
+    for method_name, prefix in method_prefixes.items():
+        mean_metrics[f'{prefix}_IoU'] = df[f'{prefix}_IoU'].mean()
+        mean_metrics[f'{prefix}_Dice'] = df[f'{prefix}_Dice'].mean()
+        mean_metrics[f'{prefix}_Precision'] = df[f'{prefix}_Precision'].mean()
+        mean_metrics[f'{prefix}_Recall'] = df[f'{prefix}_Recall'].mean()
+        mean_metrics[f'{prefix}_F1'] = df[f'{prefix}_F1'].mean()
+        mean_metrics[f'{prefix}_Balanced_Accuracy'] = df[f'{prefix}_Balanced_Accuracy'].mean()
     
     # Calculate std metrics
-    std_metrics = {
-        'Image': 'STD',
-        'SAM_IoU': df['SAM_IoU'].std(),
-        'SAM_Dice': df['SAM_Dice'].std(),
-        'SAM_Precision': df['SAM_Precision'].std(),
-        'SAM_Recall': df['SAM_Recall'].std(),
-        'SAM_F1': df['SAM_F1'].std(),
-        'SAM_Accuracy': df['SAM_Accuracy'].std(),
-        'Basic_IoU': df['Basic_IoU'].std(),
-        'Basic_Dice': df['Basic_Dice'].std(),
-        'Basic_Precision': df['Basic_Precision'].std(),
-        'Basic_Recall': df['Basic_Recall'].std(),
-        'Basic_F1': df['Basic_F1'].std(),
-        'Basic_Accuracy': df['Basic_Accuracy'].std(),
-    }
-    
-    # Append summary rows
-    df = pd.concat([df, pd.DataFrame([mean_metrics, std_metrics])], ignore_index=True)
+    std_metrics = {'Image': 'STD'}
+    for method_name, prefix in method_prefixes.items():
+        std_metrics[f'{prefix}_IoU'] = df[f'{prefix}_IoU'].std()
+        std_metrics[f'{prefix}_Dice'] = df[f'{prefix}_Dice'].std()
+        std_metrics[f'{prefix}_Precision'] = df[f'{prefix}_Precision'].std()
+        std_metrics[f'{prefix}_Recall'] = df[f'{prefix}_Recall'].std()
+        std_metrics[f'{prefix}_F1'] = df[f'{prefix}_F1'].std()
+        std_metrics[f'{prefix}_Balanced_Accuracy'] = df[f'{prefix}_Balanced_Accuracy'].std()
     
     # Generate report
-    print("\n" + "="*120)
-    print("MASK QUALITY EVALUATION REPORT")
-    print("="*120)
+    print(f"\n{'='*120}")
+    print(f"MASK QUALITY EVALUATION REPORT - Frame {frame_id}")
+    print(f"{'='*120}")
     
     report = []
     report.append("="*120)
-    report.append("MASK QUALITY EVALUATION REPORT")
-    report.append(f"Evaluating {len(ground_truth_masks)} images")
+    report.append(f"MASK QUALITY EVALUATION REPORT - Frame {frame_id}")
+    report.append(f"Evaluating {len(results)} images with {len(available_methods)} methods")
     report.append("="*120)
     report.append("")
     
@@ -209,28 +254,23 @@ def main():
     report.append("[SUMMARY STATISTICS]\n")
     
     summary_data = {
-        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Accuracy'],
-        'GroundedSAM (Mean)': [
-            f"{mean_metrics['SAM_IoU']:.4f}",
-            f"{mean_metrics['SAM_Dice']:.4f}",
-            f"{mean_metrics['SAM_Precision']:.4f}",
-            f"{mean_metrics['SAM_Recall']:.4f}",
-            f"{mean_metrics['SAM_F1']:.4f}",
-            f"{mean_metrics['SAM_Accuracy']:.4f}",
-        ],
-        'Basic Color (Mean)': [
-            f"{mean_metrics['Basic_IoU']:.4f}",
-            f"{mean_metrics['Basic_Dice']:.4f}",
-            f"{mean_metrics['Basic_Precision']:.4f}",
-            f"{mean_metrics['Basic_Recall']:.4f}",
-            f"{mean_metrics['Basic_F1']:.4f}",
-            f"{mean_metrics['Basic_Accuracy']:.4f}",
-        ],
+        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Balanced Accuracy'],
     }
     
+    for method_name, prefix in method_prefixes.items():
+        summary_data[method_name] = [
+            f"{mean_metrics[f'{prefix}_IoU']:.4f}",
+            f"{mean_metrics[f'{prefix}_Dice']:.4f}",
+            f"{mean_metrics[f'{prefix}_Precision']:.4f}",
+            f"{mean_metrics[f'{prefix}_Recall']:.4f}",
+            f"{mean_metrics[f'{prefix}_F1']:.4f}",
+            f"{mean_metrics[f'{prefix}_Balanced_Accuracy']:.4f}",
+        ]
+    
     summary_df = pd.DataFrame(summary_data)
-    print(summary_df.to_string(index=False))
-    report.append(summary_df.to_string(index=False))
+    summary_table = summary_df.to_string(index=False)
+    print(summary_table)
+    report.append(summary_table)
     report.append("")
     
     # Standard deviations
@@ -238,28 +278,23 @@ def main():
     report.append("\n[STANDARD DEVIATIONS]\n")
     
     std_data = {
-        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Accuracy'],
-        'GroundedSAM (Std)': [
-            f"{std_metrics['SAM_IoU']:.4f}",
-            f"{std_metrics['SAM_Dice']:.4f}",
-            f"{std_metrics['SAM_Precision']:.4f}",
-            f"{std_metrics['SAM_Recall']:.4f}",
-            f"{std_metrics['SAM_F1']:.4f}",
-            f"{std_metrics['SAM_Accuracy']:.4f}",
-        ],
-        'Basic Color (Std)': [
-            f"{std_metrics['Basic_IoU']:.4f}",
-            f"{std_metrics['Basic_Dice']:.4f}",
-            f"{std_metrics['Basic_Precision']:.4f}",
-            f"{std_metrics['Basic_Recall']:.4f}",
-            f"{std_metrics['Basic_F1']:.4f}",
-            f"{std_metrics['Basic_Accuracy']:.4f}",
-        ],
+        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Balanced Accuracy'],
     }
     
+    for method_name, prefix in method_prefixes.items():
+        std_data[method_name] = [
+            f"{std_metrics[f'{prefix}_IoU']:.4f}",
+            f"{std_metrics[f'{prefix}_Dice']:.4f}",
+            f"{std_metrics[f'{prefix}_Precision']:.4f}",
+            f"{std_metrics[f'{prefix}_Recall']:.4f}",
+            f"{std_metrics[f'{prefix}_F1']:.4f}",
+            f"{std_metrics[f'{prefix}_Balanced_Accuracy']:.4f}",
+        ]
+    
     std_df = pd.DataFrame(std_data)
-    print(std_df.to_string(index=False))
-    report.append(std_df.to_string(index=False))
+    std_table = std_df.to_string(index=False)
+    print(std_table)
+    report.append(std_table)
     report.append("")
     
     # Key findings
@@ -267,38 +302,18 @@ def main():
     report.append("\n[KEY FINDINGS]\n")
     
     findings = []
+    metrics_to_check = ['IoU', 'Dice', 'Precision', 'Recall', 'Balanced Accuracy']
     
-    # Compare IoU
-    if mean_metrics['SAM_IoU'] > mean_metrics['Basic_IoU']:
-        diff = (mean_metrics['SAM_IoU'] - mean_metrics['Basic_IoU']) / mean_metrics['Basic_IoU'] * 100
-        findings.append(f"[+] GroundedSAM achieves {diff:.1f}% better IoU ({mean_metrics['SAM_IoU']:.4f} vs {mean_metrics['Basic_IoU']:.4f})")
-    else:
-        diff = (mean_metrics['Basic_IoU'] - mean_metrics['SAM_IoU']) / mean_metrics['SAM_IoU'] * 100
-        findings.append(f"[+] Basic Color achieves {diff:.1f}% better IoU ({mean_metrics['Basic_IoU']:.4f} vs {mean_metrics['SAM_IoU']:.4f})")
-    
-    # Compare Dice
-    if mean_metrics['SAM_Dice'] > mean_metrics['Basic_Dice']:
-        findings.append(f"[+] GroundedSAM has better Dice coefficient ({mean_metrics['SAM_Dice']:.4f} vs {mean_metrics['Basic_Dice']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better Dice coefficient ({mean_metrics['Basic_Dice']:.4f} vs {mean_metrics['SAM_Dice']:.4f})")
-    
-    # Compare Precision
-    if mean_metrics['SAM_Precision'] > mean_metrics['Basic_Precision']:
-        findings.append(f"[+] GroundedSAM has better Precision ({mean_metrics['SAM_Precision']:.4f} vs {mean_metrics['Basic_Precision']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better Precision ({mean_metrics['Basic_Precision']:.4f} vs {mean_metrics['SAM_Precision']:.4f})")
-    
-    # Compare Recall
-    if mean_metrics['SAM_Recall'] > mean_metrics['Basic_Recall']:
-        findings.append(f"[+] GroundedSAM has better Recall ({mean_metrics['SAM_Recall']:.4f} vs {mean_metrics['Basic_Recall']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better Recall ({mean_metrics['Basic_Recall']:.4f} vs {mean_metrics['SAM_Recall']:.4f})")
-    
-    # Compare Accuracy
-    if mean_metrics['SAM_Accuracy'] > mean_metrics['Basic_Accuracy']:
-        findings.append(f"[+] GroundedSAM has better overall Accuracy ({mean_metrics['SAM_Accuracy']:.4f} vs {mean_metrics['Basic_Accuracy']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better overall Accuracy ({mean_metrics['Basic_Accuracy']:.4f} vs {mean_metrics['SAM_Accuracy']:.4f})")
+    for metric_name in metrics_to_check:
+        metric_scores = {}
+        metric_key = metric_name.replace(' ', '_')
+        for method_name, prefix in method_prefixes.items():
+            key = f'{prefix}_{metric_key}'
+            metric_scores[method_name] = mean_metrics[key]
+        
+        best_method = max(metric_scores, key=metric_scores.get)
+        best_score = metric_scores[best_method]
+        findings.append(f"[+] {metric_name}: {best_method} achieves best score ({best_score:.4f})")
     
     for finding in findings:
         print(finding)
@@ -311,20 +326,47 @@ def main():
     report.append("• Precision: True Positives / (True Positives + False Positives)")
     report.append("• Recall: True Positives / (True Positives + False Negatives)")
     report.append("• F1 Score: Harmonic mean of Precision and Recall")
-    report.append("• Accuracy: Correctly classified pixels / Total pixels")
+    report.append("• Balanced Accuracy: (Recall + Specificity) / 2")
     report.append("")
     report.append("="*120)
     
-    # Save report
-    with open(OUTPUT_REPORT, 'w') as f:
-        f.write('\n'.join(report))
-    
-    print(f"\nReport saved to: {OUTPUT_REPORT}")
-    
-    # Print individual results table (first 10 rows for preview)
-    print("\n[PER-IMAGE RESULTS (first 10 images)]\n")
-    print(df.head(10).to_string(index=False))
+    return '\n'.join(report)
 
+
+def main():
+    """Main analysis function."""
+    
+    # Find all frame directories
+    frame_dirs = find_frame_directories()
+    
+    if not frame_dirs:
+        print("❌ No frame mask directories found")
+        return
+    
+    print(f"🔍 Found {len(frame_dirs)} frame directories")
+    
+    # Analyze each frame
+    for frame_dir in frame_dirs:
+        frame_id = get_frame_id(frame_dir)
+        analysis_data = analyze_frame(frame_dir, frame_id)
+        
+        if analysis_data:
+            # Generate report
+            report_text = generate_report(analysis_data)
+            
+            # Save report to frame-specific file
+            report_file = Path(f"mask_quality_report_frame_{frame_id}.txt")
+            with open(report_file, 'w') as f:
+                f.write(report_text)
+            
+            print(f"✅ Report saved to: {report_file}")
+        else:
+            print(f"⏭️  Skipping frame {frame_id}")
+    
+    print("\n" + "="*120)
+    print("✅ Analysis complete!")
+    print("="*120)
 
 if __name__ == "__main__":
     main()
+
