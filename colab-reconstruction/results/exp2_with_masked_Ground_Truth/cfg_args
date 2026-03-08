@@ -1,0 +1,1 @@
+Namespace(sh_degree=3, source_path='/content/data/frame_0001_masked', model_path='/content/output/frame_0001_masked_r4_split5', images='images', resolution=4, white_background=False, data_device='cuda', eval=True)
