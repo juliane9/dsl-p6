@@ -1,0 +1,4 @@
+# ninja log v7
+1	51261	1772990980122819237	/content/Wheat-3DGS/submodules/simple-knn/build/temp.linux-x86_64-cpython-312/simple_knn.o	9d13674e5aa7b99a
+0	79729	1772990980121819143	/content/Wheat-3DGS/submodules/simple-knn/build/temp.linux-x86_64-cpython-312/ext.o	61c9517697cb32f8
+2	109331	1772990980123819332	/content/Wheat-3DGS/submodules/simple-knn/build/temp.linux-x86_64-cpython-312/spatial.o	f896b2bae40b1c4
