@@ -106,14 +106,10 @@
 | **SSIM** | **0.99880** |
 | **LPIPS** | **0.00164** |
 
+To evaluate whether the alpha-mask reconstruction pipeline generalizes beyond a single scene, we repeated Experiment 3 on a second frame (frame_1180) using the same training configuration (resolution 4, 15,000 iterations, and a 16/5 train–test split). In contrast to the results obtained on frame_0001, the reconstruction quality was significantly lower. The evaluation on the five held-out test views produced a mean PSNR of 20.81, a mean SSIM of 0.803, and a mean LPIPS of 0.250. Individual test images achieved PSNR values ranging from 18.81 to 24.51 and SSIM values between 0.766 and 0.889, with LPIPS scores around 0.21–0.27. These results are substantially worse than those obtained for frame_0001 (PSNR ≈ 43–44, SSIM ≈ 0.999, LPIPS ≈ 0.001–0.002). This discrepancy suggests that while the alpha-mask approach can produce very accurate reconstructions for some frames, its performance is sensitive to scene characteristics and does not yet generalize consistently across different frames of the dataset. Further investigation is therefore required to understand which factors—such as viewpoint distribution, plant structure, or segmentation quality—affect reconstruction performance
+
+
 ### ---
-
-# **Comparison of masking strategies**
-
-| Method | PSNR | SSIM | LPIPS |
-| :---- | :---- | :---- | :---- |
-| Hard-masked RGB | **44.45** | **0.99893** | **0.00125** |
-| Alpha-mask (GT) | **43.21** | **0.99880** | **0.00164** |
 
 ### Both approaches achieve **very high reconstruction quality**.
 
