@@ -1,0 +1,4 @@
+Mean PSNR: 20.81
+Mean SSIM: 0.8032
+
+Mean LPIPS: 0.2500
