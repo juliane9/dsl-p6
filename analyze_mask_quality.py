@@ -68,12 +68,13 @@ def calculate_metrics(ground_truth, prediction):
     fp = np.sum((prediction == 1) & (ground_truth == 0))
     fn = np.sum((prediction == 0) & (ground_truth == 1))
     
-    # Precision, Recall, F1, Balanced Accuracy
+    # Precision, Recall, F1, and class-wise AP used for mAP
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    tnr = tn / (tn + fp) if (tn + fp) > 0 else 0
-    balanced_accuracy = (recall + tnr) / 2
+    ap_foreground = tp / (tp + fp) if (tp + fp) > 0 else 0
+    ap_background = tn / (tn + fn) if (tn + fn) > 0 else 0
+    mean_ap = (ap_foreground + ap_background) / 2
     
     metrics = {
         'IoU': calculate_iou(ground_truth, prediction),
@@ -81,7 +82,9 @@ def calculate_metrics(ground_truth, prediction):
         'Precision': precision,
         'Recall': recall,
         'F1_Score': f1_score,
-        'Balanced_Accuracy': balanced_accuracy,
+        'AP_Foreground': ap_foreground,
+        'AP_Background': ap_background,
+        'mAP': mean_ap,
     }
     
     return metrics
@@ -182,7 +185,9 @@ def analyze_frame(masks_dir, frame_id):
             row[f'{method_prefix}_Precision'] = metrics['Precision']
             row[f'{method_prefix}_Recall'] = metrics['Recall']
             row[f'{method_prefix}_F1'] = metrics['F1_Score']
-            row[f'{method_prefix}_Balanced_Accuracy'] = metrics['Balanced_Accuracy']
+            row[f'{method_prefix}_AP_Foreground'] = metrics['AP_Foreground']
+            row[f'{method_prefix}_AP_Background'] = metrics['AP_Background']
+            row[f'{method_prefix}_mAP'] = metrics['mAP']
         
         if not skip_image:
             results.append(row)
@@ -225,7 +230,9 @@ def generate_report(analysis_data):
         mean_metrics[f'{prefix}_Precision'] = df[f'{prefix}_Precision'].mean()
         mean_metrics[f'{prefix}_Recall'] = df[f'{prefix}_Recall'].mean()
         mean_metrics[f'{prefix}_F1'] = df[f'{prefix}_F1'].mean()
-        mean_metrics[f'{prefix}_Balanced_Accuracy'] = df[f'{prefix}_Balanced_Accuracy'].mean()
+        mean_metrics[f'{prefix}_AP_Foreground'] = df[f'{prefix}_AP_Foreground'].mean()
+        mean_metrics[f'{prefix}_AP_Background'] = df[f'{prefix}_AP_Background'].mean()
+        mean_metrics[f'{prefix}_mAP'] = df[f'{prefix}_mAP'].mean()
     
     # Calculate std metrics
     std_metrics = {'Image': 'STD'}
@@ -235,7 +242,9 @@ def generate_report(analysis_data):
         std_metrics[f'{prefix}_Precision'] = df[f'{prefix}_Precision'].std()
         std_metrics[f'{prefix}_Recall'] = df[f'{prefix}_Recall'].std()
         std_metrics[f'{prefix}_F1'] = df[f'{prefix}_F1'].std()
-        std_metrics[f'{prefix}_Balanced_Accuracy'] = df[f'{prefix}_Balanced_Accuracy'].std()
+        std_metrics[f'{prefix}_AP_Foreground'] = df[f'{prefix}_AP_Foreground'].std()
+        std_metrics[f'{prefix}_AP_Background'] = df[f'{prefix}_AP_Background'].std()
+        std_metrics[f'{prefix}_mAP'] = df[f'{prefix}_mAP'].std()
     
     # Generate report
     print(f"\n{'='*120}")
@@ -254,7 +263,7 @@ def generate_report(analysis_data):
     report.append("[SUMMARY STATISTICS]\n")
     
     summary_data = {
-        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Balanced Accuracy'],
+        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'AP Foreground', 'AP Background', 'mAP'],
     }
     
     for method_name, prefix in method_prefixes.items():
@@ -264,7 +273,9 @@ def generate_report(analysis_data):
             f"{mean_metrics[f'{prefix}_Precision']:.4f}",
             f"{mean_metrics[f'{prefix}_Recall']:.4f}",
             f"{mean_metrics[f'{prefix}_F1']:.4f}",
-            f"{mean_metrics[f'{prefix}_Balanced_Accuracy']:.4f}",
+            f"{mean_metrics[f'{prefix}_AP_Foreground']:.4f}",
+            f"{mean_metrics[f'{prefix}_AP_Background']:.4f}",
+            f"{mean_metrics[f'{prefix}_mAP']:.4f}",
         ]
     
     summary_df = pd.DataFrame(summary_data)
@@ -278,7 +289,7 @@ def generate_report(analysis_data):
     report.append("\n[STANDARD DEVIATIONS]\n")
     
     std_data = {
-        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Balanced Accuracy'],
+        'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'AP Foreground', 'AP Background', 'mAP'],
     }
     
     for method_name, prefix in method_prefixes.items():
@@ -288,7 +299,9 @@ def generate_report(analysis_data):
             f"{std_metrics[f'{prefix}_Precision']:.4f}",
             f"{std_metrics[f'{prefix}_Recall']:.4f}",
             f"{std_metrics[f'{prefix}_F1']:.4f}",
-            f"{std_metrics[f'{prefix}_Balanced_Accuracy']:.4f}",
+            f"{std_metrics[f'{prefix}_AP_Foreground']:.4f}",
+            f"{std_metrics[f'{prefix}_AP_Background']:.4f}",
+            f"{std_metrics[f'{prefix}_mAP']:.4f}",
         ]
     
     std_df = pd.DataFrame(std_data)
@@ -302,7 +315,7 @@ def generate_report(analysis_data):
     report.append("\n[KEY FINDINGS]\n")
     
     findings = []
-    metrics_to_check = ['IoU', 'Dice', 'Precision', 'Recall', 'Balanced Accuracy']
+    metrics_to_check = ['IoU', 'Dice', 'Precision', 'Recall', 'mAP']
     
     for metric_name in metrics_to_check:
         metric_scores = {}
@@ -326,7 +339,9 @@ def generate_report(analysis_data):
     report.append("• Precision: True Positives / (True Positives + False Positives)")
     report.append("• Recall: True Positives / (True Positives + False Negatives)")
     report.append("• F1 Score: Harmonic mean of Precision and Recall")
-    report.append("• Balanced Accuracy: (Recall + Specificity) / 2")
+    report.append("• AP Foreground: TP / (TP + FP)")
+    report.append("• AP Background: TN / (TN + FN)")
+    report.append("• mAP: (AP_foreground + AP_background) / 2")
     report.append("")
     report.append("="*120)
     

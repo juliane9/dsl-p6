@@ -5,24 +5,28 @@ Evaluating 21 images with 2 methods
 
 [SUMMARY STATISTICS]
 
-           Metric GroundedSAM vit_b GroundedSAM vit_l
-              IoU            0.8579            0.8768
-             Dice            0.9227            0.9340
-        Precision            0.9139            0.9020
-           Recall            0.9338            0.9692
-         F1 Score            0.9227            0.9340
-Balanced Accuracy            0.9664            0.9840
+       Metric GroundedSAM vit_b GroundedSAM vit_l
+          IoU            0.8579            0.8768
+         Dice            0.9227            0.9340
+    Precision            0.9139            0.9020
+       Recall            0.9338            0.9692
+     F1 Score            0.9227            0.9340
+AP Foreground            0.9139            0.9020
+AP Background            0.9992            0.9996
+          mAP            0.9566            0.9508
 
 
 [STANDARD DEVIATIONS]
 
-           Metric GroundedSAM vit_b GroundedSAM vit_l
-              IoU            0.0514            0.0340
-             Dice            0.0312            0.0194
-        Precision            0.0433            0.0315
-           Recall            0.0443            0.0199
-         F1 Score            0.0312            0.0194
-Balanced Accuracy            0.0221            0.0099
+       Metric GroundedSAM vit_b GroundedSAM vit_l
+          IoU            0.0514            0.0340
+         Dice            0.0312            0.0194
+    Precision            0.0433            0.0315
+       Recall            0.0443            0.0199
+     F1 Score            0.0312            0.0194
+AP Foreground            0.0433            0.0315
+AP Background            0.0006            0.0002
+          mAP            0.0216            0.0157
 
 
 [KEY FINDINGS]
@@ -31,7 +35,7 @@ Balanced Accuracy            0.0221            0.0099
 [+] Dice: GroundedSAM vit_l achieves best score (0.9340)
 [+] Precision: GroundedSAM vit_b achieves best score (0.9139)
 [+] Recall: GroundedSAM vit_l achieves best score (0.9692)
-[+] Balanced Accuracy: GroundedSAM vit_l achieves best score (0.9840)
+[+] mAP: GroundedSAM vit_b achieves best score (0.9566)
 
 
 [METRIC DEFINITIONS]
@@ -41,6 +45,8 @@ Balanced Accuracy            0.0221            0.0099
 • Precision: True Positives / (True Positives + False Positives)
 • Recall: True Positives / (True Positives + False Negatives)
 • F1 Score: Harmonic mean of Precision and Recall
-• Balanced Accuracy: (Recall + Specificity) / 2
+• AP Foreground: TP / (TP + FP)
+• AP Background: TN / (TN + FN)
+• mAP: (AP_foreground + AP_background) / 2
 
 ========================================================================================================================

@@ -5,24 +5,28 @@ Evaluating 21 images with 4 methods
 
 [SUMMARY STATISTICS]
 
-           Metric Basic Color GroundedSAM vit_b GroundedSAM vit_l GroundedSAM vit_h
-              IoU      0.7256            0.7953            0.8164            0.8113
-             Dice      0.8337            0.8854            0.8985            0.8954
-        Precision      0.7817            0.8140            0.8301            0.8232
-           Recall      0.9177            0.9717            0.9806            0.9828
-         F1 Score      0.8337            0.8854            0.8985            0.8954
-Balanced Accuracy      0.9586            0.9857            0.9901            0.9913
+       Metric Basic Color GroundedSAM vit_b GroundedSAM vit_l GroundedSAM vit_h
+          IoU      0.7256            0.7953            0.8164            0.8113
+         Dice      0.8337            0.8854            0.8985            0.8954
+    Precision      0.7817            0.8140            0.8301            0.8232
+       Recall      0.9177            0.9717            0.9806            0.9828
+     F1 Score      0.8337            0.8854            0.8985            0.8954
+AP Foreground      0.7817            0.8140            0.8301            0.8232
+AP Background      0.9999            1.0000            1.0000            1.0000
+          mAP      0.8908            0.9070            0.9151            0.9116
 
 
 [STANDARD DEVIATIONS]
 
-           Metric Basic Color GroundedSAM vit_b GroundedSAM vit_l GroundedSAM vit_h
-              IoU      0.1329            0.0422            0.0364            0.0385
-             Dice      0.0992            0.0265            0.0223            0.0237
-        Precision      0.1556            0.0412            0.0388            0.0407
-           Recall      0.0412            0.0140            0.0133            0.0113
-         F1 Score      0.0992            0.0265            0.0223            0.0237
-Balanced Accuracy      0.0206            0.0070            0.0066            0.0056
+       Metric Basic Color GroundedSAM vit_b GroundedSAM vit_l GroundedSAM vit_h
+          IoU      0.1329            0.0422            0.0364            0.0385
+         Dice      0.0992            0.0265            0.0223            0.0237
+    Precision      0.1556            0.0412            0.0388            0.0407
+       Recall      0.0412            0.0140            0.0133            0.0113
+     F1 Score      0.0992            0.0265            0.0223            0.0237
+AP Foreground      0.1556            0.0412            0.0388            0.0407
+AP Background      0.0001            0.0000            0.0000            0.0000
+          mAP      0.0778            0.0206            0.0194            0.0203
 
 
 [KEY FINDINGS]
@@ -31,7 +35,7 @@ Balanced Accuracy      0.0206            0.0070            0.0066            0.0
 [+] Dice: GroundedSAM vit_l achieves best score (0.8985)
 [+] Precision: GroundedSAM vit_l achieves best score (0.8301)
 [+] Recall: GroundedSAM vit_h achieves best score (0.9828)
-[+] Balanced Accuracy: GroundedSAM vit_h achieves best score (0.9913)
+[+] mAP: GroundedSAM vit_l achieves best score (0.9151)
 
 
 [METRIC DEFINITIONS]
@@ -41,6 +45,8 @@ Balanced Accuracy      0.0206            0.0070            0.0066            0.0
 • Precision: True Positives / (True Positives + False Positives)
 • Recall: True Positives / (True Positives + False Negatives)
 • F1 Score: Harmonic mean of Precision and Recall
-• Balanced Accuracy: (Recall + Specificity) / 2
+• AP Foreground: TP / (TP + FP)
+• AP Background: TN / (TN + FN)
+• mAP: (AP_foreground + AP_background) / 2
 
 ========================================================================================================================
