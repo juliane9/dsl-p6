@@ -8,12 +8,16 @@ import pandas as pd
 # Settings
 # -----------------------
 MASKS_DIR = Path("images_and_masks/maize_2/frame_0001_masks")
-OUTPUT_REPORT = Path("mask_quality_report.txt")
+YOLOSAM_MASKS_DIR = Path("images_and_masks/maize_2/frame_0001_yolosam/masks")
+OUTPUT_REPORT = Path("mask_quality_report_frame_0001.txt")
 
 # Suffix patterns for different mask types
 GROUND_TRUTH_SUFFIX = "_mask_ground_truth.png"
-GROUNDED_SAM_SUFFIX = "_mask_grounded_sam_vit_b.png"
+GROUNDED_SAM_B_SUFFIX = "_mask_grounded_sam_vit_b.png"
+GROUNDED_SAM_L_SUFFIX = "_mask_grounded_sam_vit_l.png"
+GROUNDED_SAM_H_SUFFIX = "_mask_grounded_sam_vit_h.png"
 BASIC_SUFFIX = "_mask_colors.png"
+YOLOSAM_SUFFIX = "_000.png"
 
 
 def load_mask(mask_path):
@@ -78,7 +82,7 @@ def calculate_metrics(ground_truth, prediction):
 
 def get_image_id(filepath):
     """Extract base image ID from filename."""
-    return filepath.stem.replace(GROUND_TRUTH_SUFFIX[:-4], "").replace(GROUNDED_SAM_SUFFIX[:-4], "").replace(BASIC_SUFFIX[:-4], "")
+    return filepath.stem.replace(GROUND_TRUTH_SUFFIX[:-4], "").replace(GROUNDED_SAM_B_SUFFIX[:-4], "").replace(GROUNDED_SAM_L_SUFFIX[:-4], "").replace(GROUNDED_SAM_H_SUFFIX[:-4], "").replace(BASIC_SUFFIX[:-4], "")
 
 
 def main():
@@ -86,6 +90,10 @@ def main():
     
     if not MASKS_DIR.exists():
         print(f"❌ Masks directory not found: {MASKS_DIR}")
+        return
+
+    if not YOLOSAM_MASKS_DIR.exists():
+        print(f"❌ YOLOSAM masks directory not found: {YOLOSAM_MASKS_DIR}")
         return
     
     # Find all ground truth masks
@@ -105,8 +113,11 @@ def main():
         image_id = get_image_id(gt_path)
         
         # Construct paths for other masks
-        grounded_sam_path = MASKS_DIR / f"{image_id}{GROUNDED_SAM_SUFFIX}"
+        grounded_sam_b_path = MASKS_DIR / f"{image_id}{GROUNDED_SAM_B_SUFFIX}"
+        grounded_sam_l_path = MASKS_DIR / f"{image_id}{GROUNDED_SAM_L_SUFFIX}"
+        grounded_sam_h_path = MASKS_DIR / f"{image_id}{GROUNDED_SAM_H_SUFFIX}"
         basic_path = MASKS_DIR / f"{image_id}{BASIC_SUFFIX}"
+        yolosam_path = YOLOSAM_MASKS_DIR / f"{image_id}{YOLOSAM_SUFFIX}"
         
         # Load ground truth
         gt_mask = load_mask(gt_path)
@@ -114,10 +125,22 @@ def main():
             print(f"⚠️  Skipped: Could not load ground truth {gt_path.name}")
             continue
         
-        # Load GroundedSAM mask
-        sam_mask = load_mask(grounded_sam_path)
-        if sam_mask is None:
-            print(f"⚠️  Skipped: Could not load GroundedSAM {grounded_sam_path.name}")
+        # Load GroundedSAM vit_b mask
+        sam_b_mask = load_mask(grounded_sam_b_path)
+        if sam_b_mask is None:
+            print(f"⚠️  Skipped: Could not load GroundedSAM vit_b {grounded_sam_b_path.name}")
+            continue
+
+        # Load GroundedSAM vit_l mask
+        sam_l_mask = load_mask(grounded_sam_l_path)
+        if sam_l_mask is None:
+            print(f"⚠️  Skipped: Could not load GroundedSAM vit_l {grounded_sam_l_path.name}")
+            continue
+
+        # Load GroundedSAM vit_h mask
+        sam_h_mask = load_mask(grounded_sam_h_path)
+        if sam_h_mask is None:
+            print(f"⚠️  Skipped: Could not load GroundedSAM vit_h {grounded_sam_h_path.name}")
             continue
         
         # Load basic color mask
@@ -125,25 +148,52 @@ def main():
         if basic_mask is None:
             print(f"⚠️  Skipped: Could not load basic color {basic_path.name}")
             continue
+
+        # Load YOLOSAM mask
+        yolosam_mask = load_mask(yolosam_path)
+        if yolosam_mask is None:
+            print(f"⚠️  Skipped: Could not load YOLOSAM {yolosam_path.name}")
+            continue
         
-        # Calculate metrics for both techniques
-        sam_metrics = calculate_metrics(gt_mask, sam_mask)
+        # Calculate metrics for all techniques
+        sam_b_metrics = calculate_metrics(gt_mask, sam_b_mask)
+        sam_l_metrics = calculate_metrics(gt_mask, sam_l_mask)
+        sam_h_metrics = calculate_metrics(gt_mask, sam_h_mask)
         basic_metrics = calculate_metrics(gt_mask, basic_mask)
+        yolosam_metrics = calculate_metrics(gt_mask, yolosam_mask)
         
         results.append({
             'Image': image_id,
-            'SAM_IoU': sam_metrics['IoU'],
-            'SAM_Dice': sam_metrics['Dice'],
-            'SAM_Precision': sam_metrics['Precision'],
-            'SAM_Recall': sam_metrics['Recall'],
-            'SAM_F1': sam_metrics['F1_Score'],
-            'SAM_Accuracy': sam_metrics['Accuracy'],
+            'SAM_B_IoU': sam_b_metrics['IoU'],
+            'SAM_B_Dice': sam_b_metrics['Dice'],
+            'SAM_B_Precision': sam_b_metrics['Precision'],
+            'SAM_B_Recall': sam_b_metrics['Recall'],
+            'SAM_B_F1': sam_b_metrics['F1_Score'],
+            'SAM_B_Accuracy': sam_b_metrics['Accuracy'],
+            'SAM_L_IoU': sam_l_metrics['IoU'],
+            'SAM_L_Dice': sam_l_metrics['Dice'],
+            'SAM_L_Precision': sam_l_metrics['Precision'],
+            'SAM_L_Recall': sam_l_metrics['Recall'],
+            'SAM_L_F1': sam_l_metrics['F1_Score'],
+            'SAM_L_Accuracy': sam_l_metrics['Accuracy'],
+            'SAM_H_IoU': sam_h_metrics['IoU'],
+            'SAM_H_Dice': sam_h_metrics['Dice'],
+            'SAM_H_Precision': sam_h_metrics['Precision'],
+            'SAM_H_Recall': sam_h_metrics['Recall'],
+            'SAM_H_F1': sam_h_metrics['F1_Score'],
+            'SAM_H_Accuracy': sam_h_metrics['Accuracy'],
             'Basic_IoU': basic_metrics['IoU'],
             'Basic_Dice': basic_metrics['Dice'],
             'Basic_Precision': basic_metrics['Precision'],
             'Basic_Recall': basic_metrics['Recall'],
             'Basic_F1': basic_metrics['F1_Score'],
             'Basic_Accuracy': basic_metrics['Accuracy'],
+            'YOLOSAM_IoU': yolosam_metrics['IoU'],
+            'YOLOSAM_Dice': yolosam_metrics['Dice'],
+            'YOLOSAM_Precision': yolosam_metrics['Precision'],
+            'YOLOSAM_Recall': yolosam_metrics['Recall'],
+            'YOLOSAM_F1': yolosam_metrics['F1_Score'],
+            'YOLOSAM_Accuracy': yolosam_metrics['Accuracy'],
         })
         
         print(f"✓ Processed: {image_id}")
@@ -158,35 +208,71 @@ def main():
     # Calculate mean metrics
     mean_metrics = {
         'Image': 'MEAN',
-        'SAM_IoU': df['SAM_IoU'].mean(),
-        'SAM_Dice': df['SAM_Dice'].mean(),
-        'SAM_Precision': df['SAM_Precision'].mean(),
-        'SAM_Recall': df['SAM_Recall'].mean(),
-        'SAM_F1': df['SAM_F1'].mean(),
-        'SAM_Accuracy': df['SAM_Accuracy'].mean(),
+        'SAM_B_IoU': df['SAM_B_IoU'].mean(),
+        'SAM_B_Dice': df['SAM_B_Dice'].mean(),
+        'SAM_B_Precision': df['SAM_B_Precision'].mean(),
+        'SAM_B_Recall': df['SAM_B_Recall'].mean(),
+        'SAM_B_F1': df['SAM_B_F1'].mean(),
+        'SAM_B_Accuracy': df['SAM_B_Accuracy'].mean(),
+        'SAM_L_IoU': df['SAM_L_IoU'].mean(),
+        'SAM_L_Dice': df['SAM_L_Dice'].mean(),
+        'SAM_L_Precision': df['SAM_L_Precision'].mean(),
+        'SAM_L_Recall': df['SAM_L_Recall'].mean(),
+        'SAM_L_F1': df['SAM_L_F1'].mean(),
+        'SAM_L_Accuracy': df['SAM_L_Accuracy'].mean(),
+        'SAM_H_IoU': df['SAM_H_IoU'].mean(),
+        'SAM_H_Dice': df['SAM_H_Dice'].mean(),
+        'SAM_H_Precision': df['SAM_H_Precision'].mean(),
+        'SAM_H_Recall': df['SAM_H_Recall'].mean(),
+        'SAM_H_F1': df['SAM_H_F1'].mean(),
+        'SAM_H_Accuracy': df['SAM_H_Accuracy'].mean(),
         'Basic_IoU': df['Basic_IoU'].mean(),
         'Basic_Dice': df['Basic_Dice'].mean(),
         'Basic_Precision': df['Basic_Precision'].mean(),
         'Basic_Recall': df['Basic_Recall'].mean(),
         'Basic_F1': df['Basic_F1'].mean(),
         'Basic_Accuracy': df['Basic_Accuracy'].mean(),
+        'YOLOSAM_IoU': df['YOLOSAM_IoU'].mean(),
+        'YOLOSAM_Dice': df['YOLOSAM_Dice'].mean(),
+        'YOLOSAM_Precision': df['YOLOSAM_Precision'].mean(),
+        'YOLOSAM_Recall': df['YOLOSAM_Recall'].mean(),
+        'YOLOSAM_F1': df['YOLOSAM_F1'].mean(),
+        'YOLOSAM_Accuracy': df['YOLOSAM_Accuracy'].mean(),
     }
     
     # Calculate std metrics
     std_metrics = {
         'Image': 'STD',
-        'SAM_IoU': df['SAM_IoU'].std(),
-        'SAM_Dice': df['SAM_Dice'].std(),
-        'SAM_Precision': df['SAM_Precision'].std(),
-        'SAM_Recall': df['SAM_Recall'].std(),
-        'SAM_F1': df['SAM_F1'].std(),
-        'SAM_Accuracy': df['SAM_Accuracy'].std(),
+        'SAM_B_IoU': df['SAM_B_IoU'].std(),
+        'SAM_B_Dice': df['SAM_B_Dice'].std(),
+        'SAM_B_Precision': df['SAM_B_Precision'].std(),
+        'SAM_B_Recall': df['SAM_B_Recall'].std(),
+        'SAM_B_F1': df['SAM_B_F1'].std(),
+        'SAM_B_Accuracy': df['SAM_B_Accuracy'].std(),
+        'SAM_L_IoU': df['SAM_L_IoU'].std(),
+        'SAM_L_Dice': df['SAM_L_Dice'].std(),
+        'SAM_L_Precision': df['SAM_L_Precision'].std(),
+        'SAM_L_Recall': df['SAM_L_Recall'].std(),
+        'SAM_L_F1': df['SAM_L_F1'].std(),
+        'SAM_L_Accuracy': df['SAM_L_Accuracy'].std(),
+        'SAM_H_IoU': df['SAM_H_IoU'].std(),
+        'SAM_H_Dice': df['SAM_H_Dice'].std(),
+        'SAM_H_Precision': df['SAM_H_Precision'].std(),
+        'SAM_H_Recall': df['SAM_H_Recall'].std(),
+        'SAM_H_F1': df['SAM_H_F1'].std(),
+        'SAM_H_Accuracy': df['SAM_H_Accuracy'].std(),
         'Basic_IoU': df['Basic_IoU'].std(),
         'Basic_Dice': df['Basic_Dice'].std(),
         'Basic_Precision': df['Basic_Precision'].std(),
         'Basic_Recall': df['Basic_Recall'].std(),
         'Basic_F1': df['Basic_F1'].std(),
         'Basic_Accuracy': df['Basic_Accuracy'].std(),
+        'YOLOSAM_IoU': df['YOLOSAM_IoU'].std(),
+        'YOLOSAM_Dice': df['YOLOSAM_Dice'].std(),
+        'YOLOSAM_Precision': df['YOLOSAM_Precision'].std(),
+        'YOLOSAM_Recall': df['YOLOSAM_Recall'].std(),
+        'YOLOSAM_F1': df['YOLOSAM_F1'].std(),
+        'YOLOSAM_Accuracy': df['YOLOSAM_Accuracy'].std(),
     }
     
     # Append summary rows
@@ -210,13 +296,29 @@ def main():
     
     summary_data = {
         'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Accuracy'],
-        'GroundedSAM (Mean)': [
-            f"{mean_metrics['SAM_IoU']:.4f}",
-            f"{mean_metrics['SAM_Dice']:.4f}",
-            f"{mean_metrics['SAM_Precision']:.4f}",
-            f"{mean_metrics['SAM_Recall']:.4f}",
-            f"{mean_metrics['SAM_F1']:.4f}",
-            f"{mean_metrics['SAM_Accuracy']:.4f}",
+        'GroundedSAM vit_b (Mean)': [
+            f"{mean_metrics['SAM_B_IoU']:.4f}",
+            f"{mean_metrics['SAM_B_Dice']:.4f}",
+            f"{mean_metrics['SAM_B_Precision']:.4f}",
+            f"{mean_metrics['SAM_B_Recall']:.4f}",
+            f"{mean_metrics['SAM_B_F1']:.4f}",
+            f"{mean_metrics['SAM_B_Accuracy']:.4f}",
+        ],
+        'GroundedSAM vit_l (Mean)': [
+            f"{mean_metrics['SAM_L_IoU']:.4f}",
+            f"{mean_metrics['SAM_L_Dice']:.4f}",
+            f"{mean_metrics['SAM_L_Precision']:.4f}",
+            f"{mean_metrics['SAM_L_Recall']:.4f}",
+            f"{mean_metrics['SAM_L_F1']:.4f}",
+            f"{mean_metrics['SAM_L_Accuracy']:.4f}",
+        ],
+        'GroundedSAM vit_h (Mean)': [
+            f"{mean_metrics['SAM_H_IoU']:.4f}",
+            f"{mean_metrics['SAM_H_Dice']:.4f}",
+            f"{mean_metrics['SAM_H_Precision']:.4f}",
+            f"{mean_metrics['SAM_H_Recall']:.4f}",
+            f"{mean_metrics['SAM_H_F1']:.4f}",
+            f"{mean_metrics['SAM_H_Accuracy']:.4f}",
         ],
         'Basic Color (Mean)': [
             f"{mean_metrics['Basic_IoU']:.4f}",
@@ -225,6 +327,14 @@ def main():
             f"{mean_metrics['Basic_Recall']:.4f}",
             f"{mean_metrics['Basic_F1']:.4f}",
             f"{mean_metrics['Basic_Accuracy']:.4f}",
+        ],
+        'YOLOSAM (Mean)': [
+            f"{mean_metrics['YOLOSAM_IoU']:.4f}",
+            f"{mean_metrics['YOLOSAM_Dice']:.4f}",
+            f"{mean_metrics['YOLOSAM_Precision']:.4f}",
+            f"{mean_metrics['YOLOSAM_Recall']:.4f}",
+            f"{mean_metrics['YOLOSAM_F1']:.4f}",
+            f"{mean_metrics['YOLOSAM_Accuracy']:.4f}",
         ],
     }
     
@@ -239,13 +349,29 @@ def main():
     
     std_data = {
         'Metric': ['IoU', 'Dice', 'Precision', 'Recall', 'F1 Score', 'Accuracy'],
-        'GroundedSAM (Std)': [
-            f"{std_metrics['SAM_IoU']:.4f}",
-            f"{std_metrics['SAM_Dice']:.4f}",
-            f"{std_metrics['SAM_Precision']:.4f}",
-            f"{std_metrics['SAM_Recall']:.4f}",
-            f"{std_metrics['SAM_F1']:.4f}",
-            f"{std_metrics['SAM_Accuracy']:.4f}",
+        'GroundedSAM vit_b (Std)': [
+            f"{std_metrics['SAM_B_IoU']:.4f}",
+            f"{std_metrics['SAM_B_Dice']:.4f}",
+            f"{std_metrics['SAM_B_Precision']:.4f}",
+            f"{std_metrics['SAM_B_Recall']:.4f}",
+            f"{std_metrics['SAM_B_F1']:.4f}",
+            f"{std_metrics['SAM_B_Accuracy']:.4f}",
+        ],
+        'GroundedSAM vit_l (Std)': [
+            f"{std_metrics['SAM_L_IoU']:.4f}",
+            f"{std_metrics['SAM_L_Dice']:.4f}",
+            f"{std_metrics['SAM_L_Precision']:.4f}",
+            f"{std_metrics['SAM_L_Recall']:.4f}",
+            f"{std_metrics['SAM_L_F1']:.4f}",
+            f"{std_metrics['SAM_L_Accuracy']:.4f}",
+        ],
+        'GroundedSAM vit_h (Std)': [
+            f"{std_metrics['SAM_H_IoU']:.4f}",
+            f"{std_metrics['SAM_H_Dice']:.4f}",
+            f"{std_metrics['SAM_H_Precision']:.4f}",
+            f"{std_metrics['SAM_H_Recall']:.4f}",
+            f"{std_metrics['SAM_H_F1']:.4f}",
+            f"{std_metrics['SAM_H_Accuracy']:.4f}",
         ],
         'Basic Color (Std)': [
             f"{std_metrics['Basic_IoU']:.4f}",
@@ -254,6 +380,14 @@ def main():
             f"{std_metrics['Basic_Recall']:.4f}",
             f"{std_metrics['Basic_F1']:.4f}",
             f"{std_metrics['Basic_Accuracy']:.4f}",
+        ],
+        'YOLOSAM (Std)': [
+            f"{std_metrics['YOLOSAM_IoU']:.4f}",
+            f"{std_metrics['YOLOSAM_Dice']:.4f}",
+            f"{std_metrics['YOLOSAM_Precision']:.4f}",
+            f"{std_metrics['YOLOSAM_Recall']:.4f}",
+            f"{std_metrics['YOLOSAM_F1']:.4f}",
+            f"{std_metrics['YOLOSAM_Accuracy']:.4f}",
         ],
     }
     
@@ -267,38 +401,28 @@ def main():
     report.append("\n[KEY FINDINGS]\n")
     
     findings = []
-    
-    # Compare IoU
-    if mean_metrics['SAM_IoU'] > mean_metrics['Basic_IoU']:
-        diff = (mean_metrics['SAM_IoU'] - mean_metrics['Basic_IoU']) / mean_metrics['Basic_IoU'] * 100
-        findings.append(f"[+] GroundedSAM achieves {diff:.1f}% better IoU ({mean_metrics['SAM_IoU']:.4f} vs {mean_metrics['Basic_IoU']:.4f})")
-    else:
-        diff = (mean_metrics['Basic_IoU'] - mean_metrics['SAM_IoU']) / mean_metrics['SAM_IoU'] * 100
-        findings.append(f"[+] Basic Color achieves {diff:.1f}% better IoU ({mean_metrics['Basic_IoU']:.4f} vs {mean_metrics['SAM_IoU']:.4f})")
-    
-    # Compare Dice
-    if mean_metrics['SAM_Dice'] > mean_metrics['Basic_Dice']:
-        findings.append(f"[+] GroundedSAM has better Dice coefficient ({mean_metrics['SAM_Dice']:.4f} vs {mean_metrics['Basic_Dice']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better Dice coefficient ({mean_metrics['Basic_Dice']:.4f} vs {mean_metrics['SAM_Dice']:.4f})")
-    
-    # Compare Precision
-    if mean_metrics['SAM_Precision'] > mean_metrics['Basic_Precision']:
-        findings.append(f"[+] GroundedSAM has better Precision ({mean_metrics['SAM_Precision']:.4f} vs {mean_metrics['Basic_Precision']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better Precision ({mean_metrics['Basic_Precision']:.4f} vs {mean_metrics['SAM_Precision']:.4f})")
-    
-    # Compare Recall
-    if mean_metrics['SAM_Recall'] > mean_metrics['Basic_Recall']:
-        findings.append(f"[+] GroundedSAM has better Recall ({mean_metrics['SAM_Recall']:.4f} vs {mean_metrics['Basic_Recall']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better Recall ({mean_metrics['Basic_Recall']:.4f} vs {mean_metrics['SAM_Recall']:.4f})")
-    
-    # Compare Accuracy
-    if mean_metrics['SAM_Accuracy'] > mean_metrics['Basic_Accuracy']:
-        findings.append(f"[+] GroundedSAM has better overall Accuracy ({mean_metrics['SAM_Accuracy']:.4f} vs {mean_metrics['Basic_Accuracy']:.4f})")
-    else:
-        findings.append(f"[+] Basic Color has better overall Accuracy ({mean_metrics['Basic_Accuracy']:.4f} vs {mean_metrics['SAM_Accuracy']:.4f})")
+    method_labels = {
+        'SAM_B': 'GroundedSAM vit_b',
+        'SAM_L': 'GroundedSAM vit_l',
+        'SAM_H': 'GroundedSAM vit_h',
+        'Basic': 'Basic Color',
+        'YOLOSAM': 'YOLOSAM',
+    }
+    metric_map = {
+        'IoU': ['SAM_B_IoU', 'SAM_L_IoU', 'SAM_H_IoU', 'Basic_IoU', 'YOLOSAM_IoU'],
+        'Dice': ['SAM_B_Dice', 'SAM_L_Dice', 'SAM_H_Dice', 'Basic_Dice', 'YOLOSAM_Dice'],
+        'Precision': ['SAM_B_Precision', 'SAM_L_Precision', 'SAM_H_Precision', 'Basic_Precision', 'YOLOSAM_Precision'],
+        'Recall': ['SAM_B_Recall', 'SAM_L_Recall', 'SAM_H_Recall', 'Basic_Recall', 'YOLOSAM_Recall'],
+        'Accuracy': ['SAM_B_Accuracy', 'SAM_L_Accuracy', 'SAM_H_Accuracy', 'Basic_Accuracy', 'YOLOSAM_Accuracy'],
+    }
+
+    for metric_name, keys in metric_map.items():
+        scores = {}
+        for key in keys:
+            method_key = '_'.join(key.split('_')[:-1])
+            scores[method_labels[method_key]] = mean_metrics[key]
+        best_method = max(scores, key=scores.get)
+        findings.append(f"[+] {metric_name}: {best_method} achieves best score ({scores[best_method]:.4f})")
     
     for finding in findings:
         print(finding)
