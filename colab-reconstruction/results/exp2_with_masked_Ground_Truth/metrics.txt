@@ -1,0 +1,5 @@
+Experiment: Masked reconstruction (16 train / 5 test)
+
+Mean PSNR: 44.4518
+Mean SSIM: 0.998927
+Mean LPIPS: 0.001246
