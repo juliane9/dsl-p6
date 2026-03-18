@@ -7,11 +7,11 @@ import numpy as np
 # -----------------------
 # Settings you may tweak
 # -----------------------
-FRAME_TO_SEGMENT = "frame_0001"
+FRAME_TO_SEGMENT = "frame_1180"
 
 INPUT_DIR = Path("images_and_masks/maize_2/" + FRAME_TO_SEGMENT + "/images")
-OUTPUT_MASKS_DIR = Path("images_and_masks/maize_2/frame_0001_masks")
-OUTPUT_OVERLAYS_DIR = Path("images_and_masks/maize_2/frame_0001_masks_overlays_compressed")
+OUTPUT_MASKS_DIR = Path("images_and_masks/maize_2/" + FRAME_TO_SEGMENT + "_masks")
+OUTPUT_OVERLAYS_DIR = Path("images_and_masks/maize_2/" + FRAME_TO_SEGMENT + "_masks_overlays_compressed")
 
 # HSV color range for green plants (you can adjust these)
 # Lower bound for green
