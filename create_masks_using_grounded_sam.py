@@ -1,8 +1,18 @@
 from pathlib import Path
 import os
+import sys
 import cv2
 import numpy as np
 import torch
+
+# Make local GroundingDINO and segment_anything packages importable without a pip install.
+_repo_root = Path(__file__).resolve().parent / "Grounded-Segment-Anything"
+for _p in [
+    str(_repo_root / "GroundingDINO"),       # provides: groundingdino
+    str(_repo_root / "segment_anything"),    # provides: segment_anything (nested repo)
+]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from groundingdino.util.inference import load_model, load_image, predict
 from segment_anything import sam_model_registry, SamPredictor
@@ -11,18 +21,17 @@ from segment_anything import sam_model_registry, SamPredictor
 # -----------------------
 # Settings you may tweak
 # -----------------------
-FRAME_TO_SEGMENT = "frame_0001"
 
-INPUT_DIR = Path("images_and_masks/maize_2/" + FRAME_TO_SEGMENT +"/images")     # folder with your 21 images
-OUTPUT_DIR = Path("images_and_masks/maize_2/")    # where masks will be saved
+# Root folder that contains timestep_* sub-directories with images and masks.
+EVAL_MASK_DIR = Path("eval_mask")
 
 # Weights / configs
 GDINO_CONFIG = "Grounded-Segment-Anything/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py"
 GDINO_CKPT = Path("weights/groundingdino_swint_ogc.pth")
 
 # CPU-friendly SAM checkpoint is vit_b:
-SAM_TYPE = "vit_b"
-SAM_CKPT = Path("weights/sam_vit_b_01ec64.pth")  # change if you have a different SAM ckpt
+SAM_TYPE = "vit_l"
+SAM_CKPT = Path("weights/sam_vit_l_0b3195.pth")  # change if you have a different SAM ckpt
 
 # Text prompt for GroundingDINO
 # TEXT_PROMPT = "plant, leaf, foliage"
@@ -93,17 +102,33 @@ def main():
     device = "cpu"
     torch.set_grad_enabled(False)
 
-    ensure_exists(INPUT_DIR, "Input folder")
+    if not EVAL_MASK_DIR.exists():
+        print(f"No eval_mask folder found: {EVAL_MASK_DIR.resolve()}")
+        return
+
     ensure_exists(Path(GDINO_CONFIG), "GroundingDINO config")
     ensure_exists(GDINO_CKPT, "GroundingDINO checkpoint")
     ensure_exists(SAM_CKPT, "SAM checkpoint")
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    mask_dir = OUTPUT_DIR / (FRAME_TO_SEGMENT + "_masks")
-    overlay_dir = OUTPUT_DIR / (FRAME_TO_SEGMENT + "_masks_overlays_compressed")
-    mask_dir.mkdir(exist_ok=True)
-    if SAVE_COMPRESSED_OVERLAYS:
-        overlay_dir.mkdir(exist_ok=True)
+    # Collect all source images from every timestep_* sub-folder
+    exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+    images = sorted(
+        p
+        for ts_dir in sorted(EVAL_MASK_DIR.glob("timestep_*"))
+        for p in ts_dir.iterdir()
+        if p.suffix.lower() in exts and not p.stem.endswith(("_mask_ground_truth",
+                                                              "_mask_sam3",
+                                                              "_mask_colors",
+                                                              "_mask_grounded_sam_vit_b",
+                                                              "_mask_grounded_sam_vit_l",
+                                                              "_mask_grounded_sam_vit_h"))
+    )
+
+    if not images:
+        print(f"No images found under: {EVAL_MASK_DIR.resolve()}")
+        return
+
+    print(f"Found {len(images)} images across timestep folders under: {EVAL_MASK_DIR.resolve()}")
 
     # Load models once
     print("Loading GroundingDINO (CPU)...")
@@ -114,26 +139,12 @@ def main():
     sam.to(device)
     predictor = SamPredictor(sam)
 
-    # Gather images
-    exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
-    images = [p for p in INPUT_DIR.iterdir() if p.suffix.lower() in exts]
-    images.sort()
-
-    if not images:
-        print(f"No images found in: {INPUT_DIR.resolve()}")
-        return
-
-    print(f"Found {len(images)} images in: {INPUT_DIR.resolve()}")
-    print(f"Saving outputs to: {OUTPUT_DIR.resolve()}")
-
     for img_path in images:
         print(f"\nProcessing: {img_path.name}")
 
-        # GroundingDINO load (returns RGB image_source and a preprocessed tensor)
         image_source, image_tensor = load_image(str(img_path))
         h, w = image_source.shape[:2]
 
-        # Predict boxes from text prompt
         boxes, scores, phrases = predict(
             model=gdino,
             image=image_tensor,
@@ -147,15 +158,12 @@ def main():
             print("  - No boxes found. Try lowering BOX_THRESHOLD/TEXT_THRESHOLD or adjusting TEXT_PROMPT.")
             continue
 
-        # Choose best single detection
         best_box_norm, best_score = pick_best_box(boxes, scores)
         print(f"  - Best detection score: {best_score:.3f} | phrase: {phrases[int(torch.argmax(scores).item())]}")
 
-        # Convert to pixel xyxy
         best_box_xyxy = dino_boxes_to_xyxy_pixel(best_box_norm, w=w, h=h)
 
-        # Run SAM with that box
-        predictor.set_image(image_source)  # expects RGB uint8
+        predictor.set_image(image_source)
         sam_box = predictor.transform.apply_boxes_torch(best_box_xyxy, image_source.shape[:2]).to(device)
 
         masks, _, _ = predictor.predict_torch(
@@ -165,16 +173,15 @@ def main():
             multimask_output=False,
         )
 
-        # masks: (1,1,H,W) boolean
         mask01 = masks[0, 0].detach().cpu().numpy().astype(bool)
 
-        # Save outputs
-        out_mask = mask_dir / f"{img_path.stem}_mask_grounded_sam_vit_b.png"
+        # Save mask alongside the source image in the same timestep folder
+        out_mask = img_path.parent / f"{img_path.stem}_mask_grounded_sam_vit_b.png"
         save_mask_png(mask01, out_mask)
         print(f"  - Saved mask: {out_mask.name}")
 
         if SAVE_COMPRESSED_OVERLAYS:
-            out_ov = overlay_dir / f"{img_path.stem}_mask_grounded_sam_vit_b_overlay_compressed.jpg"
+            out_ov = img_path.parent / f"{img_path.stem}_mask_grounded_sam_vit_b_overlay_compressed.jpg"
             save_overlay(image_source, mask01, out_ov)
             print(f"  - Saved overlay: {out_ov.name}")
 

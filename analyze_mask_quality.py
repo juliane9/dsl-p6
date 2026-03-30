@@ -5,10 +5,12 @@ import numpy as np
 import pandas as pd
 
 
-BASE_MASKS_ROOT = Path("images_and_masks/maize_2")
+BASE_MASKS_ROOT = Path("eval_mask")
 GROUND_TRUTH_SUFFIX = "_mask_ground_truth.png"
-YOLOSAM_SUFFIX = "_000.png"
-REPORT_PATTERN = "mask_quality_report_{frame_name}.txt"
+REPORT_PATH = Path("mask_quality_report_eval_mask.txt")
+
+# Add methods here as new mask files become available next to each ground truth mask.
+EVAL_METHODS = ["sam3", "colors", "grounded_sam_vit_b"]
 
 METRIC_COLUMNS = [
     "IoU",
@@ -22,12 +24,9 @@ METRIC_COLUMNS = [
 ]
 
 METHOD_LABELS = {
-    "grounded_sam_vit_b": "GroundedSAM vit_b",
-    "grounded_sam_vit_l": "GroundedSAM vit_l",
-    "grounded_sam_vit_h": "GroundedSAM vit_h",
-    "colors": "Basic Color",
     "sam3": "SAM 3",
-    "yolosam": "YOLOSAM",
+    "colors": "Basic Color",
+    "grounded_sam_vit_b": "GroundedSAM vit_b",
 }
 
 
@@ -114,61 +113,28 @@ def extract_image_id_from_gt(gt_path: Path) -> str:
     return gt_path.name[: -len(GROUND_TRUTH_SUFFIX)]
 
 
-def discover_frame_mask_dirs(base_dir: Path):
-    return sorted(base_dir.glob("frame_*_masks"))
+def discover_ground_truth_masks(base_dir: Path) -> list:
+    return sorted(base_dir.rglob(f"*{GROUND_TRUTH_SUFFIX}"))
 
 
-def discover_methods(frame_masks_dir: Path) -> dict:
-    methods = {}
-
-    for mask_path in sorted(frame_masks_dir.glob("*_mask_*.png")):
-        name = mask_path.name
-        if name.endswith(GROUND_TRUTH_SUFFIX):
-            continue
-        if name.endswith("_probability.png"):
-            continue
-
-        marker = "_mask_"
-        idx = name.rfind(marker)
-        if idx == -1:
-            continue
-
-        method_key = name[idx + len(marker) : -4]
-        suffix = name[idx:]
-        methods[method_key] = {
-            "source": "frame_masks",
-            "suffix": suffix,
-        }
-
-    frame_name = frame_masks_dir.name.replace("_masks", "")
-    yolosam_masks_dir = frame_masks_dir.parent / f"{frame_name}_yolosam" / "masks"
-    if yolosam_masks_dir.exists() and any(yolosam_masks_dir.glob(f"*{YOLOSAM_SUFFIX}")):
-        methods["yolosam"] = {
-            "source": "yolosam",
-            "suffix": YOLOSAM_SUFFIX,
-            "dir": yolosam_masks_dir,
-        }
-
-    return methods
+def build_method_mask_path(gt_path: Path, method_key: str) -> Path:
+    image_id = extract_image_id_from_gt(gt_path)
+    return gt_path.parent / f"{image_id}_mask_{method_key}.png"
 
 
 def evaluate_method(
     method_key: str,
-    method_spec: dict,
-    image_ids: list,
-    gt_masks: dict,
-    frame_masks_dir: Path,
+    gt_records: list,
 ):
     rows = []
     missing = 0
     load_fail = 0
     shape_mismatch = 0
 
-    for image_id in image_ids:
-        if method_spec["source"] == "frame_masks":
-            mask_path = frame_masks_dir / f"{image_id}{method_spec['suffix']}"
-        else:
-            mask_path = method_spec["dir"] / f"{image_id}{method_spec['suffix']}"
+    for record in gt_records:
+        image_id = record["image_id"]
+        gt_mask = record["gt_mask"]
+        mask_path = build_method_mask_path(record["gt_path"], method_key)
 
         if not mask_path.exists():
             missing += 1
@@ -179,7 +145,6 @@ def evaluate_method(
             load_fail += 1
             continue
 
-        gt_mask = gt_masks[image_id]
         if gt_mask.shape != pred_mask.shape:
             shape_mismatch += 1
             continue
@@ -208,7 +173,7 @@ def build_metric_table(mean_or_std_df: pd.DataFrame) -> pd.DataFrame:
     return table
 
 
-def write_frame_report(frame_name: str, df: pd.DataFrame, method_stats: dict) -> Path:
+def write_report(df: pd.DataFrame, method_stats: dict, total_ground_truth: int) -> Path:
     mean_df = df.groupby("Method")[METRIC_COLUMNS].mean().sort_index()
     std_df = df.groupby("Method")[METRIC_COLUMNS].std().fillna(0.0).sort_index()
 
@@ -218,7 +183,8 @@ def write_frame_report(frame_name: str, df: pd.DataFrame, method_stats: dict) ->
     lines = []
     lines.append("=" * 120)
     lines.append("MASK QUALITY EVALUATION REPORT")
-    lines.append(f"Frame: {frame_name}")
+    lines.append("Dataset: eval_mask")
+    lines.append(f"Ground truth masks found: {total_ground_truth}")
     lines.append(f"Images evaluated: {df['Image'].nunique()}")
     lines.append("=" * 120)
     lines.append("")
@@ -261,79 +227,70 @@ def write_frame_report(frame_name: str, df: pd.DataFrame, method_stats: dict) ->
     lines.append("[PER-IMAGE RESULTS]")
     lines.append(df.to_string(index=False))
 
-    report_path = Path(REPORT_PATTERN.format(frame_name=frame_name))
+    report_path = REPORT_PATH
     report_path.write_text("\n".join(lines), encoding="utf-8")
     return report_path
 
 
-def process_frame(frame_masks_dir: Path) -> bool:
-    frame_name = frame_masks_dir.name.replace("_masks", "")
-
-    gt_paths = sorted(frame_masks_dir.glob(f"*{GROUND_TRUTH_SUFFIX}"))
+def process_dataset(base_dir: Path) -> bool:
+    gt_paths = discover_ground_truth_masks(base_dir)
     if not gt_paths:
-        print(f"[WARN] No ground truth masks found for {frame_name}: {frame_masks_dir}")
+        print(f"[WARN] No ground truth masks found under: {base_dir}")
         return False
 
-    gt_masks = {}
-    image_ids = []
+    gt_records = []
     for gt_path in gt_paths:
         image_id = extract_image_id_from_gt(gt_path)
         gt_mask = load_mask(gt_path)
         if gt_mask is None:
             print(f"[WARN] Could not load ground truth: {gt_path.name}")
             continue
-        gt_masks[image_id] = gt_mask
-        image_ids.append(image_id)
+        gt_records.append(
+            {
+                "image_id": image_id,
+                "gt_path": gt_path,
+                "gt_mask": gt_mask,
+            }
+        )
 
-    if not image_ids:
-        print(f"[WARN] No valid ground truth masks loaded for {frame_name}")
+    if not gt_records:
+        print("[WARN] No valid ground truth masks could be loaded")
         return False
 
-    methods = discover_methods(frame_masks_dir)
-    if not methods:
-        print(f"[WARN] No computed methods found for {frame_name}")
-        return False
+    methods = EVAL_METHODS
 
     all_rows = []
     method_stats = {}
 
-    print(f"\n[INFO] Processing {frame_name}")
-    print(f"[INFO] Ground truth images: {len(image_ids)}")
-    print(f"[INFO] Discovered methods: {', '.join(method_label(k) for k in sorted(methods.keys(), key=method_label))}")
+    print("\n[INFO] Processing eval_mask dataset")
+    print(f"[INFO] Ground truth images: {len(gt_records)}")
+    print(f"[INFO] Evaluating methods: {', '.join(method_label(k) for k in methods)}")
 
-    for method_key in sorted(methods.keys(), key=method_label):
-        rows, stats = evaluate_method(method_key, methods[method_key], image_ids, gt_masks, frame_masks_dir)
+    for method_key in methods:
+        rows, stats = evaluate_method(method_key, gt_records)
         method_stats[method_key] = stats
         all_rows.extend(rows)
 
     if not all_rows:
-        print(f"[WARN] No valid method predictions evaluated for {frame_name}")
+        print("[WARN] No valid method predictions were evaluated")
         return False
 
     df = pd.DataFrame(all_rows)
-    report_path = write_frame_report(frame_name, df, method_stats)
+    report_path = write_report(df, method_stats, len(gt_records))
     print(f"[OK] Report saved: {report_path}")
     return True
 
 
 def main():
-    frame_dirs = discover_frame_mask_dirs(BASE_MASKS_ROOT)
-    if not frame_dirs:
-        print(f"[ERROR] No frame mask folders found under: {BASE_MASKS_ROOT}")
+    if not BASE_MASKS_ROOT.exists():
+        print(f"[ERROR] Base folder does not exist: {BASE_MASKS_ROOT}")
         return
 
-    print(f"Found {len(frame_dirs)} frame mask folders")
-
-    processed = 0
-    for frame_dir in frame_dirs:
-        if process_frame(frame_dir):
-            processed += 1
-
-    if processed == 0:
-        print("[ERROR] No frame could be evaluated")
+    if not process_dataset(BASE_MASKS_ROOT):
+        print("[ERROR] Evaluation failed")
         return
 
-    print(f"\n[DONE] Evaluated {processed}/{len(frame_dirs)} frame folders")
+    print("\n[DONE] Evaluation finished")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,83 @@
+========================================================================================================================
+MASK QUALITY EVALUATION REPORT
+Dataset: eval_mask
+Ground truth masks found: 9
+Images evaluated: 9
+========================================================================================================================
+
+[METHOD AVAILABILITY]
+- Basic Color: evaluated=9, missing=0, load_fail=0, shape_mismatch=0
+- GroundedSAM vit_b: evaluated=9, missing=0, load_fail=0, shape_mismatch=0
+- SAM 3: evaluated=9, missing=0, load_fail=0, shape_mismatch=0
+
+[SUMMARY STATISTICS - MEAN]
+       Metric  Basic Color  GroundedSAM vit_b    SAM 3
+          IoU     0.860926           0.805792 0.951065
+         Dice     0.922814           0.876117 0.974875
+    Precision     0.904708           0.848261 0.979549
+       Recall     0.944950           0.909643 0.970378
+           F1     0.922814           0.876117 0.974875
+AP_Foreground     0.856561           0.795716 0.950939
+AP_Background     0.999515           0.998054 0.999561
+          mAP     0.928038           0.896885 0.975250
+
+[STANDARD DEVIATIONS]
+       Metric  Basic Color  GroundedSAM vit_b    SAM 3
+          IoU     0.092266           0.201063 0.013579
+         Dice     0.055687           0.165432 0.007147
+    Precision     0.079158           0.182281 0.010014
+       Recall     0.050829           0.146737 0.012134
+           F1     0.055687           0.165432 0.007147
+AP_Foreground     0.098282           0.223792 0.013753
+AP_Background     0.000298           0.004159 0.000373
+          mAP     0.049169           0.113903 0.006941
+
+[KEY FINDINGS]
+[+] IoU: SAM 3 achieves best score (0.9511)
+[+] Dice: SAM 3 achieves best score (0.9749)
+[+] Precision: SAM 3 achieves best score (0.9795)
+[+] Recall: SAM 3 achieves best score (0.9704)
+[+] F1: SAM 3 achieves best score (0.9749)
+[+] AP_Foreground: SAM 3 achieves best score (0.9509)
+[+] AP_Background: SAM 3 achieves best score (0.9996)
+[+] mAP: SAM 3 achieves best score (0.9753)
+
+[METRIC DEFINITIONS]
+- IoU: Intersection over Union
+- Dice: 2 * Intersection / (Sum of masks)
+- Precision: TP / (TP + FP)
+- Recall: TP / (TP + FN)
+- F1: Harmonic mean of Precision and Recall
+- AP_Foreground: Average Precision for foreground class
+- AP_Background: Average Precision for background class
+- mAP: (AP_Foreground + AP_Background) / 2
+
+[PER-IMAGE RESULTS]
+                        Image          MethodKey            Method      IoU     Dice  Precision   Recall       F1  AP_Foreground  AP_Background      mAP
+GX010014_20250909_003302_1004               sam3             SAM 3 0.949260 0.973970   0.978471 0.969509 0.973970       0.948752       0.999884 0.974318
+GX010074_20250909_003302_1004               sam3             SAM 3 0.944877 0.971658   0.959244 0.984397 0.971658       0.944345       0.999930 0.972138
+GX010324_20250909_003302_1004               sam3             SAM 3 0.967402 0.983431   0.986623 0.980260 0.983431       0.967207       0.999939 0.983573
+GX010014_20250912_120302_2006               sam3             SAM 3 0.957280 0.978174   0.981325 0.975043 0.978174       0.957064       0.999767 0.978415
+GX010074_20250912_120302_2006               sam3             SAM 3 0.929421 0.963419   0.972444 0.954561 0.963419       0.928791       0.999456 0.964124
+GX010324_20250912_120302_2006               sam3             SAM 3 0.966588 0.983010   0.982231 0.983791 0.983010       0.966539       0.999764 0.983151
+GX010014_20250915_233302_3008               sam3             SAM 3 0.947028 0.972794   0.976756 0.968863 0.972794       0.947142       0.999165 0.973154
+GX010074_20250915_233302_3008               sam3             SAM 3 0.934854 0.966330   0.983294 0.949941 0.966330       0.935006       0.999043 0.967025
+GX010324_20250915_233302_3008               sam3             SAM 3 0.962875 0.981086   0.995549 0.967038 0.981086       0.963608       0.999100 0.981354
+GX010014_20250909_003302_1004             colors       Basic Color 0.820010 0.901105   0.936535 0.868258 0.901105       0.813653       0.999499 0.906576
+GX010074_20250909_003302_1004             colors       Basic Color 0.683461 0.811972   0.773830 0.854068 0.811972       0.661544       0.999352 0.830448
+GX010324_20250909_003302_1004             colors       Basic Color 0.904170 0.949674   0.964236 0.935545 0.949674       0.902284       0.999801 0.951042
+GX010014_20250912_120302_2006             colors       Basic Color 0.903110 0.949089   0.911998 0.989324 0.949089       0.902360       0.999893 0.951126
+GX010074_20250912_120302_2006             colors       Basic Color 0.757023 0.861711   0.770836 0.976876 0.861711       0.753283       0.999685 0.876484
+GX010324_20250912_120302_2006             colors       Basic Color 0.932267 0.964946   0.951557 0.978718 0.964946       0.931607       0.999685 0.965646
+GX010014_20250915_233302_3008             colors       Basic Color 0.930472 0.963984   0.949817 0.978580 0.963984       0.930022       0.999401 0.964711
+GX010074_20250915_233302_3008             colors       Basic Color 0.854315 0.921435   0.900013 0.943901 0.921435       0.850570       0.998897 0.924734
+GX010324_20250915_233302_3008             colors       Basic Color 0.963501 0.981411   0.983553 0.979279 0.981411       0.963722       0.999424 0.981573
+GX010014_20250909_003302_1004 grounded_sam_vit_b GroundedSAM vit_b 0.808018 0.893816   0.847922 0.944963 0.893816       0.801463       0.999788 0.900626
+GX010074_20250909_003302_1004 grounded_sam_vit_b GroundedSAM vit_b 0.835732 0.910517   0.848573 0.982215 0.910517       0.833560       0.999918 0.916739
+GX010324_20250909_003302_1004 grounded_sam_vit_b GroundedSAM vit_b 0.860797 0.925192   0.870269 0.987513 0.925192       0.859441       0.999960 0.929700
+GX010014_20250912_120302_2006 grounded_sam_vit_b GroundedSAM vit_b 0.887446 0.940367   0.910439 0.972329 0.940367       0.885500       0.999735 0.942618
+GX010074_20250912_120302_2006 grounded_sam_vit_b GroundedSAM vit_b 0.840908 0.913580   0.901273 0.926227 0.913580       0.835650       0.999110 0.917380
+GX010324_20250912_120302_2006 grounded_sam_vit_b GroundedSAM vit_b 0.921972 0.959402   0.942201 0.977242 0.959402       0.921081       0.999662 0.960371
+GX010014_20250915_233302_3008 grounded_sam_vit_b GroundedSAM vit_b 0.281812 0.439709   0.378078 0.525346 0.439709       0.210805       0.987069 0.598937
+GX010074_20250915_233302_3008 grounded_sam_vit_b GroundedSAM vit_b 0.870647 0.930851   0.958462 0.904787 0.930851       0.868980       0.998179 0.933580
+GX010324_20250915_233302_3008 grounded_sam_vit_b GroundedSAM vit_b 0.944801 0.971617   0.977133 0.966163 0.971617       0.944967       0.999063 0.972015
