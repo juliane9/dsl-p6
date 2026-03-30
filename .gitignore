@@ -1,5 +1,6 @@
 images_and_masks/maize_2/frame_0001/
 images_and_masks/maize_2/frame_1180/
+images_and_masks/maize_4/images_sam_3_movie
 weights/groundingdino_swint_ogc.pth
 weights/sam_vit_b_01ec64.pth
 Grounded-Segment-Anything/ 
