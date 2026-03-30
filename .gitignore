@@ -1,8 +1,13 @@
 images_and_masks/maize_2/frame_0001/
 images_and_masks/maize_2/frame_1180/
-images_and_masks/maize_4/images_sam_3_movie
+images_and_masks/maize_4/images_sam_3_movie/
 weights/groundingdino_swint_ogc.pth
 weights/sam_vit_b_01ec64.pth
+weights/sam_vit_h_4b8939.pth
+weights/sam_vit_l_0b3195.pth
+movies/GX010014_timelapse_with_masks.mp4
+movies/GX010014_timelapse.mp4
+movies/.movie_build_tmp/
 Grounded-Segment-Anything/ 
 # Large experiment outputs
 *.pth
