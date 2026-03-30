@@ -49,8 +49,8 @@ def print_progress(current: int, total: int, label: str) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Create a side-by-side movie from maize_4 images and corresponding SAM3 masks. "
-            "The original image is shown on the left and the mask with timestep label is shown on the right."
+            "Create a stacked movie from maize_4 images and corresponding SAM3 masks. "
+            "The original image is shown on top and the mask with timestep label is shown on the bottom."
         )
     )
     parser.add_argument(
